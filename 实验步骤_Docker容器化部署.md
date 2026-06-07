@@ -266,3 +266,30 @@ docker-compose up -d --build
 3. **国内网络**：拉取镜像可能较慢，可配置镜像加速器（阿里云 / 中科大）
 4. **数据持久化**：`docker-compose down` 不会删除 volume，数据保留；`down -v` 会清空数据
 5. **首次启动**：pgAdmin 启动较慢（30-60秒），等待 healthy 状态后再访问
+
+---
+
+## 实验收获与总结
+
+### 一、实验收获
+
+1. **掌握了 Docker 容器化部署 GIS 环境的核心流程**：从拉取 PostGIS 镜像、编写 docker-compose.yml 编排文件，到一键启动 PostGIS + pgAdmin 双服务，完整实践了"环境即代码"的理念。以往手动安装 PostgreSQL 并配置 PostGIS 扩展需要大量步骤且容易出错，容器化后一条命令即可复现整个环境。
+
+2. **深入理解了三层架构在 GIS 工程中的协作关系**：前端（Vue + Leaflet）负责地图可视化与用户交互，Python 层承担空间数据 ETL 与预处理，Java 后端通过 JDBC 连接 PostGIS 对外提供 RESTful API。Docker 容器在这个架构中充当了"数据库即服务"的角色，各层通过标准协议通信，实现了松耦合。
+
+3. **学会了使用 docker-compose 进行服务编排**：通过 `depends_on` + `healthcheck` 机制保证了 PostGIS 就绪后 pgAdmin 才启动；通过 `docker-entrypoint-initdb.d` 目录挂载，实现了数据库首次启动时的自动初始化（建表 + 插入示例数据），大大简化了环境搭建流程。
+
+4. **体验了 AI 辅助生成项目文档的全过程**：利用 AI 提示词生成了包含三层架构表格、数据流向图和快速启动命令的 README.md，显著提高了文档撰写效率。
+
+### 二、遇到的问题及解决方法
+
+| 问题 | 原因 | 解决方法 |
+|------|------|----------|
+| **Docker Desktop 启动失败：Virtualization support not detected** | 主板 BIOS 中 Intel VT-x 虚拟化技术未开启 | 重启电脑进入 BIOS（F2 键），在 Advanced → CPU Configuration 中将 Intel Virtualization Technology 改为 Enabled，F10 保存退出 |
+| **WSL 更新下载极慢（3-4 KB/s）** | 微软 CDN（wslstorestorage.blob.core.windows.net）在国内被限速，`wsl --update` 长时间卡在 6%-7% | ① 挂载香港 VPN 加速 ② 改用管理员 PowerShell 直接执行 `dism.exe` 手动启用 WSL 和虚拟机平台功能，再运行 `wsl --update`，避免了通过图形界面下载的慢速通道 |
+| **Docker 守护进程无法启动** | 初期只安装了 Docker Desktop 但 WSL 2 内核未安装，导致 docker 引擎缺少运行时后端 | 以管理员身份依次执行：`dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all` 和 `VirtualMachinePlatform`，然后 `wsl --update` 安装 WSL 2.7.3 内核，问题解决 |
+| **psql 连接报错 "stdin is not a terminal"** | 在非交互式终端中使用了 `docker exec -it`（含 TTY 参数） | 去掉 `-t` 参数，改用 `docker exec gis-postgis psql -U gis -d gis_lab -c "SQL语句"` 方式执行查询 |
+
+### 三、关键经验总结
+
+> 本次实验最大的体会是：**"环境问题"往往是开发过程中最耗时却最容易被忽视的环节**。Docker 容器化通过将操作系统、依赖库、软件版本打包为不可变镜像，从根本上解决了"在我电脑上能跑"的经典痛点。对于 GIS 开发而言，这一点尤为重要——PostGIS 的 `ST_*` 空间函数在不同版本间可能存在行为差异，锁定 `postgis/postgis:17-3.5` 镜像版本就锁定了整个空间计算环境的一致性。此外，将 `docker-compose.yml` 纳入 Git 版本控制后，任何团队成员只需 `docker compose up -d` 一条命令即可获得与生产环境完全一致的开发数据库，环境搭建从"半天"缩短到"3 分钟"。这次实验完整经历了从 BIOS 硬件配置到容器化服务运行的完整链路，对理解"开发环境 → 版本控制 → 容器交付"的现代软件工程实践有着重要的认知提升。
