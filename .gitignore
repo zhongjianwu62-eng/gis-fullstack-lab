@@ -1,0 +1,49 @@
+# ===== 依赖目录 =====
+node_modules/
+.pnp
+.pnp.js
+
+# ===== 构建产物 =====
+dist/
+build/
+*.tsbuildinfo
+
+# ===== Python 虚拟环境 =====
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+
+# ===== IDE 与编辑器 =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ===== 环境变量 =====
+.env
+.env.local
+.env.*.local
+
+# ===== 日志 =====
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# ===== 临时文件 =====
+tmp/
+temp/
+*.tmp
+~$*.docx
+~$*.xlsx
+
+# ===== 锁文件（保留 pnpm-lock.yaml） =====
+package-lock.json
+yarn.lock
