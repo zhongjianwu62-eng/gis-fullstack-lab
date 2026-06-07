@@ -1,0 +1,49 @@
+# ==============================================
+#  GIS 全栈项目 — Docker 容器编排
+#  承接第03讲练习2 + 挑战2
+#  PostGIS 空间数据库 + pgAdmin 可视化管理
+# ==============================================
+version: "3.9"
+
+services:
+  # ── PostGIS 空间数据库 ──
+  postgis:
+    image: postgis/postgis:17-3.5
+    container_name: gis-postgis
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gis
+      POSTGRES_PASSWORD: gis2024
+      POSTGRES_DB: gis_lab
+    ports:
+      - "5432:5432"
+    volumes:
+      # 数据持久化（容器删除后数据不丢失）
+      - pgdata:/var/lib/postgresql/data
+      # 初始化脚本（首次启动自动建表）
+      - ./docker/init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gis -d gis_lab"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── pgAdmin 数据库管理界面 ──
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: gis-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@gis.com
+      PGADMIN_DEFAULT_PASSWORD: admin2024
+    ports:
+      - "8080:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      postgis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  pgadmin_data:

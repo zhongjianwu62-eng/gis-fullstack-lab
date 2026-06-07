@@ -44,6 +44,10 @@ temp/
 ~$*.docx
 ~$*.xlsx
 
+# ===== Docker =====
+docker/pgdata/
+docker/pgadmin_data/
+
 # ===== 锁文件（保留 pnpm-lock.yaml） =====
 package-lock.json
 yarn.lock
