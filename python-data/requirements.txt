@@ -1,0 +1,7 @@
+# GIS Python 数据处理依赖
+geopandas>=1.0.0
+shapely>=2.0.0
+fiona>=1.9.0
+pyproj>=3.6.0
+folium>=0.16.0
+requests>=2.31.0
