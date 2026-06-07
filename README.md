@@ -62,3 +62,11 @@ pip install geopandas shapely fiona pyproj
 - **实验一**：GIS 全栈开发环境搭建
 - **实验二**：AI 辅助编程（Leaflet 地图组件 + Prompt 优化）
 - **实验三**：Git 版本控制与 GitHub 协作
+
+## 贡献者
+
+- **ZHONG** — GIS 全栈开发学习者
+
+## 仓库地址
+
+[https://github.com/zhongjianwu62-eng/gis-fullstack-lab](https://github.com/zhongjianwu62-eng/gis-fullstack-lab)
