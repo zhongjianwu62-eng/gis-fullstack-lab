@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GIS全栈开发实验项目</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: linear-gradient(135deg, #0f2027 0%, #203a43 40%, #2c5364 100%);
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+    }
+    h1 { font-size: 2rem; margin-bottom: 8px; text-align: center; }
+    .subtitle { color: #94a3b8; margin-bottom: 40px; text-align: center; }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 20px;
+      max-width: 1000px;
+      width: 100%;
+    }
+    .card {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px;
+      padding: 24px;
+      transition: all 0.25s;
+      text-decoration: none;
+      color: inherit;
+      backdrop-filter: blur(6px);
+    }
+    .card:hover {
+      background: rgba(255,255,255,0.12);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+    }
+    .card h3 { font-size: 1.1rem; margin-bottom: 8px; }
+    .card p { font-size: 0.85rem; color: #94a3b8; line-height: 1.6; }
+    .card .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      margin-top: 10px;
+      background: rgba(79,110,247,0.3);
+      color: #a5b4fc;
+    }
+    .card.primary {
+      border-color: rgba(79,110,247,0.4);
+      background: rgba(79,110,247,0.12);
+    }
+    .card.primary:hover { background: rgba(79,110,247,0.2); }
+    .card.primary .badge { background: rgba(79,110,247,0.5); color: #c7d2fe; }
+
+    footer {
+      margin-top: 50px;
+      font-size: 0.75rem;
+      color: #64748b;
+      text-align: center;
+    }
+    footer a { color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <h1>🗺️ GIS 全栈开发实验</h1>
+  <p class="subtitle">地理空间智能 · WebGIS · 三维可视化</p>
+
+  <div class="card-grid">
+    <!-- 实验三作品集（主力项目） -->
+    <a href="实验三/portfolio/" class="card primary">
+      <h3>🏆 个人GIS作品集 (P1)</h3>
+      <p>多图层整合 · 专题地图 · 交互式信息面板 · 标注编辑器 · 17个个人POI · 5大分类 · 3种探索模式</p>
+      <span class="badge">⭐ 主力项目</span>
+    </a>
+
+    <!-- 实验三第1部分 -->
+    <a href="实验三/index.html" class="card">
+      <h3>📍 实验三(1)：Leaflet 地图交互</h3>
+      <p>多底图切换 · POI标注(DivIcon+Popup+Tooltip) · 地图书签 · 坐标显示 · 距离测量</p>
+      <span class="badge">Leaflet 1.9.4</span>
+    </a>
+
+    <!-- 实验三第2部分 -->
+    <a href="实验三/专题地图.html" class="card">
+      <h3>📊 实验三(2)：GeoJSON 专题地图</h3>
+      <p>GDP分级设色(YlOrRd) · 比例符号图 · pointToLayer · filter过滤 · 图例设计</p>
+      <span class="badge">GeoJSON · 阿里DataV</span>
+    </a>
+
+    <!-- 实验三第3部分 -->
+    <a href="实验三/maplibre.html" class="card">
+      <h3>🏗️ 实验三(3)：MapLibre 3D可视化</h3>
+      <p>矢量瓦片 · 数据驱动样式(match/interpolate) · 点聚合 · fill-extrusion 3D建筑</p>
+      <span class="badge">MapLibre GL JS 4.7</span>
+    </a>
+  </div>
+
+  <footer>
+    <p>GIS工程与开发课程 · 钟健武 · <a href="https://github.com/zhongjianwu62-eng/gis-fullstack-lab">GitHub</a></p>
+  </footer>
+</body>
+</html>
