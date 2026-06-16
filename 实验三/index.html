@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实验三 - WebGIS二维开发</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+    <!-- ========== 头部 ========== -->
+    <header class="header">
+        <h1>🗺️ WebGIS二维开发 - 实验三</h1>
+        <p>Leaflet 1.9.4 地图交互综合演示 | 多底图切换 | POI标注 | 地图书签 | 距离测量</p>
+    </header>
+
+    <!-- ========== 主体容器 ========== -->
+    <div class="main-container">
+
+        <!-- 左侧书签面板 -->
+        <div class="panel panel-left" id="bookmarkPanel">
+            <div class="panel-header">
+                <h3>📚 地图书签</h3>
+            </div>
+            <div class="panel-body">
+                <div class="current-view-info">
+                    <span class="label">当前视角</span>
+                    <span class="value" id="currentViewInfo">--</span>
+                </div>
+                <div class="add-bookmark-row">
+                    <input type="text" id="bookmarkName" placeholder="书签名称（回车保存）" />
+                    <button class="btn btn-sm btn-primary" onclick="addBookmark()" title="保存当前视角">💾</button>
+                </div>
+                <ul class="bookmark-list" id="bookmarkList">
+                    <li class="bookmark-empty">暂无书签</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 地图容器 -->
+        <div id="map" class="map-container"></div>
+
+        <!-- 右侧工具面板 -->
+        <div class="panel panel-right" id="toolPanel">
+            <div class="panel-header">
+                <h3>🛠️ 测量工具</h3>
+            </div>
+            <div class="panel-body">
+                <div class="measure-info">
+                    <div class="info-row">
+                        <span>测量点数</span>
+                        <span class="highlight" id="measureCount">0</span>
+                    </div>
+                    <div class="info-row">
+                        <span>段距离</span>
+                        <span class="highlight" id="segmentDistance">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span>总距离</span>
+                        <span class="highlight" id="totalDistance">0 m</span>
+                    </div>
+                </div>
+                <div class="measure-buttons">
+                    <button class="btn btn-danger btn-full" onclick="clearMeasure()">🗑️ 清除测量</button>
+                    <button class="btn btn-warning btn-full" onclick="undoLastPoint()">↩️ 撤销上一点</button>
+                </div>
+                <div class="measure-tip">
+                    💡 点击地图添加测量点<br />
+                    拖拽点位可调整位置
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部坐标栏 -->
+        <div class="coordinate-bar" id="coordinateBar">
+            <div class="coord-item">
+                <span class="coord-label">经度 (Longitude)</span>
+                <span class="coord-value" id="displayLng">--</span>
+            </div>
+            <div class="coord-divider"></div>
+            <div class="coord-item">
+                <span class="coord-label">纬度 (Latitude)</span>
+                <span class="coord-value" id="displayLat">--</span>
+            </div>
+            <div class="coord-divider"></div>
+            <div class="coord-item">
+                <span class="coord-label">缩放级别 (Zoom)</span>
+                <span class="coord-value" id="displayZoom">--</span>
+            </div>
+            <div class="coord-divider"></div>
+            <div class="coord-item">
+                <span class="coord-label">鼠标点击坐标</span>
+                <span class="coord-value" id="displayClick">点击地图获取</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== POI统计面板（地图内浮动） ========== -->
+    <div class="stats-overlay" id="statsOverlay">
+        <h4>📊 POI统计</h4>
+        <div id="statsContent"></div>
+    </div>
+
+    <!-- ========== 脚本 ========== -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="js/poi-data.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,275 @@
+/**
+ * ============================================================
+ * POI 数据模块
+ * 包含 POI 数据定义、分类配置、自定义图标工厂等
+ * 数据格式：GeoJSON FeatureCollection
+ * 覆盖范围：以北京为中心的全国主要城市地标
+ * ============================================================
+ */
+
+/** POI 数据 (GeoJSON FeatureCollection) */
+const poiGeoJSON = {
+    "type": "FeatureCollection",
+    "metadata": {
+        "title": "中国主要城市地标 POI 数据集",
+        "description": "用于实验三 WebGIS 二维开发演示",
+        "author": "钟健武",
+        "totalFeatures": 15
+    },
+    "features": [
+        // ===== 餐饮类 (restaurant) =====
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "全聚德烤鸭店（前门店）",
+                "category": "restaurant",
+                "categoryName": "餐饮",
+                "icon": "🍜",
+                "desc": "北京老字号烤鸭店，创建于1864年",
+                "address": "北京市东城区前门大街30号",
+                "rating": "⭐4.8"
+            },
+            "geometry": { "type": "Point", "coordinates": [116.3982, 39.8974] }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "东来顺饭庄（王府井店）",
+                "category": "restaurant",
+                "categoryName": "餐饮",
+                "icon": "🥘",
+                "desc": "中华老字号清真涮羊肉",
+                "address": "北京市东城区王府井大街198号",
+                "rating": "⭐4.6"
+            },
+            "geometry": { "type": "Point", "coordinates": [116.4142, 39.9168] }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "广州酒家（文昌总店）",
+                "category": "restaurant",
+                "categoryName": "餐饮",
+                "icon": "🥟",
+                "desc": "广州老字号粤菜馆，早茶文化代表",
+                "address": "广州市荔湾区文昌南路2号",
+                "rating": "⭐4.7"
+            },
+            "geometry": { "type": "Point", "coordinates": [113.2408, 23.1175] }
+        },
+
+        // ===== 景点类 (scenic) =====
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "故宫博物院",
+                "category": "scenic",
+                "categoryName": "景点",
+                "icon": "🏯",
+                "desc": "明清两代皇家宫殿，世界文化遗产",
+                "address": "北京市东城区景山前街4号",
+                "rating": "⭐4.9"
+            },
+            "geometry": { "type": "Point", "coordinates": [116.3970, 39.9178] }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "天坛公园",
+                "category": "scenic",
+                "categoryName": "景点",
+                "icon": "🏛️",
+                "desc": "明清皇帝祭天场所，世界文化遗产",
+                "address": "北京市东城区天坛路甲1号",
+                "rating": "⭐4.8"
+            },
+            "geometry": { "type": "Point", "coordinates": [116.4110, 39.8822] }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "广州塔（小蛮腰）",
+                "category": "scenic",
+                "categoryName": "景点",
+                "icon": "🗼",
+                "desc": "广州地标建筑，高600米",
+                "address": "广州市海珠区阅江西路222号",
+                "rating": "⭐4.7"
+            },
+            "geometry": { "type": "Point", "coordinates": [113.3245, 23.1065] }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "西湖风景区",
+                "category": "scenic",
+                "categoryName": "景点",
+                "icon": "🏞️",
+                "desc": "杭州标志性景点，世界文化景观遗产",
+                "address": "杭州市西湖区龙井路1号",
+                "rating": "⭐4.9"
+            },
+            "geometry": { "type": "Point", "coordinates": [120.1472, 30.2436] }
+        },
+
+        // ===== 教育类 (education) =====
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "清华大学",
+                "category": "education",
+                "categoryName": "教育",
+                "icon": "🎓",
+                "desc": "中国顶尖综合性研究型大学",
+                "address": "北京市海淀区清华园1号",
+                "rating": "⭐4.9"
+            },
+            "geometry": { "type": "Point", "coordinates": [116.3265, 40.0084] }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "北京大学",
+                "category": "education",
+                "categoryName": "教育",
+                "icon": "📚",
+                "desc": "中国第一所国立综合性大学",
+                "address": "北京市海淀区颐和园路5号",
+                "rating": "⭐4.9"
+            },
+            "geometry": { "type": "Point", "coordinates": [116.3059, 39.9869] }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "中国国家图书馆",
+                "category": "education",
+                "categoryName": "教育",
+                "icon": "📖",
+                "desc": "亚洲规模最大的图书馆",
+                "address": "北京市海淀区中关村南大街33号",
+                "rating": "⭐4.7"
+            },
+            "geometry": { "type": "Point", "coordinates": [116.3264, 39.9419] }
+        },
+
+        // ===== 购物类 (shopping) =====
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "王府井步行街",
+                "category": "shopping",
+                "categoryName": "购物",
+                "icon": "🛍️",
+                "desc": "北京最著名的商业街，百年历史",
+                "address": "北京市东城区王府井大街",
+                "rating": "⭐4.6"
+            },
+            "geometry": { "type": "Point", "coordinates": [116.4107, 39.9147] }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "三里屯太古里",
+                "category": "shopping",
+                "categoryName": "购物",
+                "icon": "🛒",
+                "desc": "北京时尚潮流地标，国际品牌聚集",
+                "address": "北京市朝阳区三里屯路19号",
+                "rating": "⭐4.5"
+            },
+            "geometry": { "type": "Point", "coordinates": [116.4540, 39.9336] }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "广州天河城",
+                "category": "shopping",
+                "categoryName": "购物",
+                "icon": "🏬",
+                "desc": "广州天河商圈核心商业综合体",
+                "address": "广州市天河区天河路208号",
+                "rating": "⭐4.5"
+            },
+            "geometry": { "type": "Point", "coordinates": [113.3246, 23.1320] }
+        },
+
+        // ===== 交通类 (transport) =====
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "北京首都国际机场",
+                "category": "transport",
+                "categoryName": "交通",
+                "icon": "✈️",
+                "desc": "中国最繁忙的国际航空枢纽之一",
+                "address": "北京市顺义区机场路",
+                "rating": "⭐4.3"
+            },
+            "geometry": { "type": "Point", "coordinates": [116.6031, 40.0799] }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "name": "广州南站",
+                "category": "transport",
+                "categoryName": "交通",
+                "icon": "🚄",
+                "desc": "华南地区最大的高铁枢纽站",
+                "address": "广州市番禺区南站北路",
+                "rating": "⭐4.4"
+            },
+            "geometry": { "type": "Point", "coordinates": [113.2708, 22.9897] }
+        }
+    ]
+};
+
+/**
+ * 分类配置
+ * - name: 分类中文名
+ * - color: 分类主题色
+ * - icon: 分类图标（emoji）
+ */
+const categoryConfig = {
+    'restaurant': { name: '🍽️ 餐饮', color: '#f5222d', icon: '🍜' },
+    'scenic':     { name: '🏛️ 景点', color: '#52c41a', icon: '🎫' },
+    'education':  { name: '🎓 教育', color: '#1890ff', icon: '📚' },
+    'shopping':   { name: '🛍️ 购物', color: '#722ed1', icon: '🛒' },
+    'transport':  { name: '🚄 交通', color: '#fa8c16', icon: '✈️' }
+};
+
+/**
+ * 创建 POI 自定义图标 (L.DivIcon)
+ * @param {string} emoji   - 表情符号
+ * @param {string} category - 分类key
+ * @returns {L.DivIcon}
+ */
+function createPOIIcon(emoji, category) {
+    const cssClass = `poi-${category}`;
+    return L.divIcon({
+        className: '',
+        html: `<div class="poi-marker ${cssClass}">${emoji}</div>`,
+        iconSize: [34, 34],
+        iconAnchor: [17, 17],
+        popupAnchor: [0, -17]
+    });
+}
+
+/**
+ * 生成 Popup HTML 内容
+ * @param {Object} props - 要素 properties
+ * @returns {string}
+ */
+function createPopupHTML(props) {
+    const config = categoryConfig[props.category] || {};
+    const color = config.color || '#666';
+    return `
+        <div class="poi-popup">
+            <h3>${props.icon} ${props.name}</h3>
+            <span class="category-tag" style="background:${color}">${props.categoryName}</span>
+            <p><strong>📝 简介：</strong>${props.desc}</p>
+            <p><strong>📍 地址：</strong>${props.address}</p>
+            ${props.rating ? `<p><strong>🏅 评分：</strong>${props.rating}</p>` : ''}
+        </div>
+    `;
+}

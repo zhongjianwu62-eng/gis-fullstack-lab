@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实验三(2) - GeoJSON专题地图</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif; overflow: hidden; height: 100vh; }
+
+        /* ===== 地图容器 ===== */
+        #map { width: 100%; height: 100%; }
+
+        /* ===== 加载遮罩 ===== */
+        .loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.92); z-index: 9999;
+            display: flex; justify-content: center; align-items: center;
+            flex-direction: column; transition: opacity 0.4s;
+        }
+        .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+        .loading-spinner {
+            width: 48px; height: 48px;
+            border: 4px solid #e8e8e8; border-top: 4px solid #1890ff;
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+        }
+        .loading-text { margin-top: 16px; color: #666; font-size: 14px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ===== 标题 ===== */
+        .map-title {
+            position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; background: rgba(255,255,255,0.95);
+            padding: 10px 24px; border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+            font-size: 17px; font-weight: 700; color: #1a1a2e;
+            pointer-events: none;
+        }
+
+        /* ===== 信息面板 ===== */
+        .info-panel {
+            padding: 12px 16px; background: rgba(255,255,255,0.95);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12); border-radius: 10px;
+            font-size: 13px; min-width: 210px;
+        }
+        .info-panel h4 {
+            margin: 0 0 10px; font-size: 14px; color: #333;
+            padding-bottom: 8px; border-bottom: 1px solid #eee;
+        }
+        .info-panel .row { margin: 5px 0; color: #555; }
+        .info-panel .val { color: #e74c3c; font-weight: 700; font-size: 15px; }
+        .info-panel .hint { color: #999; font-style: italic; }
+
+        /* ===== 图例面板 ===== */
+        .legend-panel {
+            padding: 12px 16px; background: rgba(255,255,255,0.95);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12); border-radius: 10px;
+            font-size: 12px; line-height: 22px;
+        }
+        .legend-panel h4 { margin: 0 0 8px; font-size: 13px; color: #333; }
+        .legend-row { display: flex; align-items: center; margin: 3px 0; }
+        .legend-color {
+            width: 20px; height: 14px; border-radius: 3px;
+            margin-right: 8px; flex-shrink: 0; opacity: 0.85;
+        }
+        .legend-circle {
+            border-radius: 50%; margin-right: 8px; flex-shrink: 0;
+            border: 2px solid rgba(200,60,60,0.8); background: rgba(255,110,110,0.55);
+        }
+        .legend-divider {
+            margin: 8px 0; border-top: 1px dashed #ddd;
+        }
+
+        /* ===== 控制按钮栏 ===== */
+        .control-bar {
+            position: absolute; top: 80px; left: 10px; z-index: 1000;
+            display: flex; flex-direction: column; gap: 6px;
+        }
+        .ctrl-btn {
+            padding: 8px 14px; border: none; border-radius: 6px;
+            cursor: pointer; font-size: 12px; font-family: inherit;
+            background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: all 0.2s; text-align: left;
+        }
+        .ctrl-btn:hover { transform: translateX(2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .ctrl-btn.active { background: #1890ff; color: white; font-weight: 600; }
+
+        /* ===== 弹出窗口样式 ===== */
+        .custom-popup .leaflet-popup-content-wrapper { border-radius: 10px; overflow: hidden; padding: 0; }
+        .custom-popup .leaflet-popup-content { margin: 0; min-width: 200px; }
+        .popup-header {
+            background: linear-gradient(135deg, #1890ff, #096dd9);
+            color: white; padding: 10px 14px; font-size: 15px; font-weight: 600;
+        }
+        .popup-body { padding: 10px 14px; font-size: 13px; }
+        .popup-body p { margin: 4px 0; color: #555; }
+        .popup-highlight { color: #e74c3c; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <!-- 加载提示 -->
+    <div class="loading-overlay" id="loading">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">正在加载中国省级行政区划数据...</div>
+    </div>
+
+    <!-- 标题 -->
+    <div class="map-title">🇨🇳 中国省级GDP分级设色图 + 省会城市人口比例符号图</div>
+
+    <!-- 地图 -->
+    <div id="map"></div>
+
+    <!-- 控制按钮 -->
+    <div class="control-bar" id="controlBar">
+        <button class="ctrl-btn active" data-mode="all">📊 全部显示</button>
+        <button class="ctrl-btn" data-mode="choropleth">🎨 仅分级设色</button>
+        <button class="ctrl-btn" data-mode="symbol">🔵 仅比例符号</button>
+        <button class="ctrl-btn" data-mode="high-gdp">💰 高GDP省份 (>5万亿)</button>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+    /* ================================================================
+       实验三(2) - GeoJSON专题地图
+       功能：分级设色图 + 比例符号图 + 交互 + 图例 + 过滤
+       数据源：阿里 DataV GeoJSON + 2023统计年鉴
+       ================================================================ */
+
+    // ==================== 数据配置 ====================
+
+    /** 阿里 DataV - 中国省级行政区划 GeoJSON */
+    const GEOJSON_URL = 'https://geo.datav.aliyun.com/areas_v3/bound/100000_full.json';
+
+    /**
+     * 2023年各省 GDP（亿元）和常住人口（万人）数据
+     * 按 adcode 索引：
+     *   adcode 前2位=省代码, 110000=北京, 440000=广东 等
+     */
+    const PROVINCE_DATA = {
+        '110000': { name:'北京市',     gdp:43760,  pop:2189, region:'华北' },
+        '120000': { name:'天津市',     gdp:16737,  pop:1373, region:'华北' },
+        '130000': { name:'河北省',     gdp:43944,  pop:7448, region:'华北' },
+        '140000': { name:'山西省',     gdp:25642,  pop:3481, region:'华北' },
+        '150000': { name:'内蒙古',     gdp:24627,  pop:2400, region:'华北' },
+        '210000': { name:'辽宁省',     gdp:30209,  pop:4197, region:'东北' },
+        '220000': { name:'吉林省',     gdp:13531,  pop:2347, region:'东北' },
+        '230000': { name:'黑龙江省',   gdp:15901,  pop:3099, region:'东北' },
+        '310000': { name:'上海市',     gdp:47218,  pop:2489, region:'华东' },
+        '320000': { name:'江苏省',     gdp:128222, pop:8515, region:'华东' },
+        '330000': { name:'浙江省',     gdp:82553,  pop:6577, region:'华东' },
+        '340000': { name:'安徽省',     gdp:47050,  pop:6127, region:'华东' },
+        '350000': { name:'福建省',     gdp:54355,  pop:4188, region:'华东' },
+        '360000': { name:'江西省',     gdp:32200,  pop:4528, region:'华东' },
+        '370000': { name:'山东省',     gdp:92069,  pop:10153,region:'华东' },
+        '410000': { name:'河南省',     gdp:59132,  pop:9872, region:'华中' },
+        '420000': { name:'湖北省',     gdp:55803,  pop:5838, region:'华中' },
+        '430000': { name:'湖南省',     gdp:50050,  pop:6604, region:'华中' },
+        '440000': { name:'广东省',     gdp:135673, pop:12684,region:'华南' },
+        '450000': { name:'广西',       gdp:27202,  pop:5027, region:'华南' },
+        '460000': { name:'海南省',     gdp:7551,   pop:1027, region:'华南' },
+        '500000': { name:'重庆市',     gdp:30145,  pop:3212, region:'西南' },
+        '510000': { name:'四川省',     gdp:60132,  pop:8374, region:'西南' },
+        '520000': { name:'贵州省',     gdp:20913,  pop:3856, region:'西南' },
+        '530000': { name:'云南省',     gdp:30021,  pop:4693, region:'西南' },
+        '540000': { name:'西藏',       gdp:2392,   pop:364,  region:'西南' },
+        '610000': { name:'陕西省',     gdp:33786,  pop:3956, region:'西北' },
+        '620000': { name:'甘肃省',     gdp:11863,  pop:2490, region:'西北' },
+        '630000': { name:'青海省',     gdp:3799,   pop:594,  region:'西北' },
+        '640000': { name:'宁夏',       gdp:5315,   pop:725,  region:'西北' },
+        '650000': { name:'新疆',       gdp:19125,  pop:2585, region:'西北' },
+        '710000': { name:'台湾省',     gdp:0,      pop:2342, region:'台湾' },
+        '810000': { name:'香港',       gdp:24012,  pop:750,  region:'港澳' },
+        '820000': { name:'澳门',       gdp:2912,   pop:68,   region:'港澳' }
+    };
+
+    /**
+     * 省会城市人口数据（GeoJSON FeatureCollection）
+     * 用于比例符号图
+     */
+    const citiesGeoJSON = {
+        type: 'FeatureCollection',
+        features: [
+            { type:'Feature', geometry:{ type:'Point', coordinates:[116.4074,39.9042] }, properties:{ name:'北京', province:'北京市', population:2189, level:'直辖市' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[121.4737,31.2304] }, properties:{ name:'上海', province:'上海市', population:2489, level:'直辖市' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[113.2644,23.1291] }, properties:{ name:'广州', province:'广东省', population:1881, level:'省会' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[104.0657,30.6595] }, properties:{ name:'成都', province:'四川省', population:2119, level:'省会' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[106.5507,29.5630] }, properties:{ name:'重庆', province:'重庆市', population:3212, level:'直辖市' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[114.3054,30.5931] }, properties:{ name:'武汉', province:'湖北省', population:1373, level:'省会' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[120.1551,30.2741] }, properties:{ name:'杭州', province:'浙江省', population:1237, level:'省会' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[118.7969,32.0603] }, properties:{ name:'南京', province:'江苏省', population:942,  level:'省会' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[117.2272,31.8206] }, properties:{ name:'合肥', province:'安徽省', population:946,  level:'省会' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[113.6254,34.7466] }, properties:{ name:'郑州', province:'河南省', population:1274, level:'省会' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[117.0009,36.6758] }, properties:{ name:'济南', province:'山东省', population:920,  level:'省会' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[108.9398,34.3416] }, properties:{ name:'西安', province:'陕西省', population:1295, level:'省会' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[112.9388,28.2282] }, properties:{ name:'长沙', province:'湖南省', population:1042, level:'省会' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[117.1912,39.1256] }, properties:{ name:'天津', province:'天津市', population:1373, level:'直辖市' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[123.4315,41.8057] }, properties:{ name:'沈阳', province:'辽宁省', population:911,  level:'省会' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[126.6424,45.7567] }, properties:{ name:'哈尔滨', province:'黑龙江省', population:988, level:'省会' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[125.3235,43.8171] }, properties:{ name:'长春', province:'吉林省', population:907,  level:'省会' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[108.3200,22.8240] }, properties:{ name:'南宁', province:'广西', population:874,  level:'省会' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[102.7123,25.0389] }, properties:{ name:'昆明', province:'云南省', population:846,  level:'省会' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[114.5149,38.0428] }, properties:{ name:'石家庄', province:'河北省', population:1120, level:'省会' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[119.3062,26.0753] }, properties:{ name:'福州', province:'福建省', population:829,  level:'省会' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[87.6168,43.8256] }, properties:{ name:'乌鲁木齐', province:'新疆', population:405,  level:'省会' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[91.1145,29.6500] }, properties:{ name:'拉萨', province:'西藏', population:87,   level:'省会' } },
+            { type:'Feature', geometry:{ type:'Point', coordinates:[110.3312,20.0220] }, properties:{ name:'海口', province:'海南省', population:287,  level:'省会' } }
+        ]
+    };
+
+    // ==================== 分级设色配置 ====================
+
+    /**
+     * GDP 分级断点（亿元）
+     * 采用自定义分级：结合中国GDP分布特点，使用指数型断点
+     * 分级依据：2023年各省GDP范围 2,392 ~ 135,673 亿元
+     * 分级策略：等间距不等频，低值区密集、高值区稀疏
+     */
+    const GDP_GRADES = [0, 10000, 20000, 35000, 55000, 80000, 100000, 135000];
+
+    /**
+     * 顺序色带 (Sequential): YlOrRd 黄-橙-红
+     * ColorBrewer 7-class YlOrRd，从浅黄到深红
+     * 选择依据：GDP 是连续数值型数据，从低到高有明确方向性
+     *   顺序色带通过亮度/饱和度递增来编码数值大小
+     *   浅色=低值、深色=高值，符合视觉认知习惯
+     */
+    const GDP_COLORS = [
+        '#FFEDA0',  //   0 ~ 10,000  浅黄  (极低)
+        '#FED976',  //  10k ~ 20,000 亮黄  (低)
+        '#FEB24C',  //  20k ~ 35,000 浅橙  (中低)
+        '#FD8D3C',  //  35k ~ 55,000 橙色  (中)
+        '#FC4E2A',  //  55k ~ 80,000 橙红  (中高)
+        '#E31A1C',  //  80k ~ 100,000 红   (高)
+        '#BD0026',  // 100k ~ 135,000 深红 (极高)
+        '#800026'   // > 135,000     暗红  (最高-仅广东)
+    ];
+
+    /**
+     * 获取 GDP 对应的填充颜色
+     * @param {number} gdp - GDP值（亿元），0表示无数据
+     * @returns {string} CSS颜色
+     */
+    function getGDPColor(gdp) {
+        if (gdp === undefined || gdp === null || gdp === 0) return '#cccccc';
+        for (let i = GDP_GRADES.length - 1; i >= 0; i--) {
+            if (gdp > GDP_GRADES[i]) return GDP_COLORS[i];
+        }
+        return GDP_COLORS[0];
+    }
+
+    /**
+     * 获取比例符号半径
+     * 使用平方根缩放 (Flannery 感知校正)
+     * 公式：r = sqrt(population) * k
+     * 平方根缩放使得人眼感知的面积比例 ≈ 数值比例
+     * （若使用线性缩放，大脑会高估大面积符号的差异）
+     * @param {number} pop - 人口（万人）
+     * @returns {number} 半径（像素）
+     */
+    function getSymbolRadius(pop) {
+        return Math.sqrt(pop) * 1.5;
+    }
+
+    // ==================== 全局状态 ====================
+    let map;
+    let choroplethLayer = null;   // 分级设色图层
+    let symbolLayer = null;       // 比例符号图层
+    let currentMode = 'all';      // 当前显示模式
+    let geoJSONData = null;       // 缓存的省级GeoJSON数据
+
+    // ==================== 地图初始化 ====================
+    function initMap() {
+        map = L.map('map', {
+            center: [35.5, 105],
+            zoom: 4,
+            minZoom: 3,
+            maxZoom: 10,
+            zoomControl: true
+        });
+
+        // 使用浅色底图（CartoDB Light），突出专题数据
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://carto.com/">CARTO</a> | 底图不含标签，突出专题渲染',
+            subdomains: 'abcd',
+            maxZoom: 19
+        }).addTo(map);
+
+        // 也可叠加天地图注记
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OSM',
+            maxZoom: 19,
+            opacity: 0.15  // 极淡的OSM作为参考
+        }).addTo(map);
+    }
+
+    // ==================== 分级设色图层 ====================
+
+    /**
+     * 面样式回调 (style option)
+     * 根据 feature.properties.adcode 查找 GDP 数据并返回样式
+     */
+    function choroplethStyle(feature) {
+        const adcode = feature.properties.adcode;
+        const data = PROVINCE_DATA[adcode];
+        const gdp = data ? data.gdp : 0;
+        return {
+            fillColor: getGDPColor(gdp),
+            weight: 1,
+            opacity: 1,
+            color: '#ffffff',
+            fillOpacity: 0.8
+        };
+    }
+
+    /**
+     * 要素交互绑定 (onEachFeature option)
+     * 为每个省份面绑定 hover 高亮、click 缩放、popup
+     */
+    function onEachProvince(feature, layer) {
+        const adcode = feature.properties.adcode;
+        const data = PROVINCE_DATA[adcode] || {};
+        const gdp = data.gdp || 0;
+        const pop = data.population || 0;
+        const perCapita = pop > 0 ? Math.round(gdp * 10000 / pop) : 0;
+
+        // Popup
+        const popupHTML = `
+            <div class="popup-header">${data.name || feature.properties.name}</div>
+            <div class="popup-body">
+                <p>📊 GDP：<span class="popup-highlight">${gdp ? gdp.toLocaleString() : '暂无数据'}</span> 亿元</p>
+                <p>👥 人口：<span class="popup-highlight">${pop ? pop.toLocaleString() : '--'}</span> 万人</p>
+                <p>💰 人均GDP：<span class="popup-highlight">${perCapita ? perCapita.toLocaleString() : '--'}</span> 元</p>
+                <p>🗺️ 区域：${data.region || '--'}</p>
+            </div>
+        `;
+        layer.bindPopup(popupHTML, { className: 'custom-popup', maxWidth: 260 });
+
+        // Tooltip
+        layer.bindTooltip(data.name || feature.properties.name, {
+            sticky: true, direction: 'top', opacity: 0.85
+        });
+
+        // 交互事件
+        layer.on({
+            mouseover: function (e) {
+                const lyr = e.target;
+                lyr.setStyle({ weight: 3, color: '#333', fillOpacity: 0.95 });
+                if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+                    lyr.bringToFront();
+                }
+            },
+            mouseout: function (e) {
+                choroplethLayer.resetStyle(e.target);
+            },
+            click: function (e) {
+                map.fitBounds(e.target.getBounds(), { padding: [40, 40], maxZoom: 7 });
+            }
+        });
+    }
+
+    /**
+     * 过滤函数 (filter option)
+     * 用于"高GDP省份"模式
+     */
+    function filterHighGDP(feature) {
+        const adcode = feature.properties.adcode;
+        const data = PROVINCE_DATA[adcode];
+        return data && data.gdp >= 50000;
+    }
+
+    /**
+     * 创建/重建分级设色图层
+     * @param {boolean} highOnly - 是否仅显示高GDP省份
+     */
+    function createChoroplethLayer(highOnly) {
+        if (!geoJSONData) return;
+
+        // 移除旧图层
+        if (choroplethLayer) {
+            map.removeLayer(choroplethLayer);
+        }
+
+        choroplethLayer = L.geoJSON(geoJSONData, {
+            style: choroplethStyle,
+            onEachFeature: onEachProvince,
+            filter: highOnly ? filterHighGDP : undefined
+        }).addTo(map);
+
+        return choroplethLayer;
+    }
+
+    // ==================== 比例符号图层 ====================
+
+    /**
+     * 点要素渲染 (pointToLayer option)
+     * 将 Point 几何转换为 CircleMarker，半径映射人口值
+     */
+    function pointToLayer(feature, latlng) {
+        const pop = feature.properties.population;
+        const radius = getSymbolRadius(pop);
+        return L.circleMarker(latlng, {
+            radius: radius,
+            fillColor: '#3388ff',
+            color: '#1a5dc7',
+            weight: 2,
+            opacity: 0.9,
+            fillOpacity: 0.55
+        });
+    }
+
+    /**
+     * 城市要素交互绑定
+     */
+    function onEachCity(feature, layer) {
+        const p = feature.properties;
+        const popupHTML = `
+            <div class="popup-header">🏙️ ${p.name}</div>
+            <div class="popup-body">
+                <p>📍 省份：${p.province}</p>
+                <p>🏷️ 级别：${p.level}</p>
+                <p>👥 人口：<span class="popup-highlight">${p.population.toLocaleString()}</span> 万人</p>
+            </div>
+        `;
+        layer.bindPopup(popupHTML, { className: 'custom-popup', maxWidth: 240 });
+        layer.bindTooltip(`${p.name} (${p.population}万)`, {
+            direction: 'top', offset: [0, -8], opacity: 0.85
+        });
+
+        layer.on({
+            mouseover: function (e) {
+                e.target.setStyle({ fillOpacity: 0.85, weight: 4, color: '#003eb3' });
+            },
+            mouseout: function (e) {
+                symbolLayer.resetStyle(e.target);
+            }
+        });
+    }
+
+    /**
+     * 创建比例符号图层
+     */
+    function createSymbolLayer() {
+        if (symbolLayer) {
+            map.removeLayer(symbolLayer);
+        }
+
+        symbolLayer = L.geoJSON(citiesGeoJSON, {
+            pointToLayer: pointToLayer,
+            onEachFeature: onEachCity
+        }).addTo(map);
+
+        return symbolLayer;
+    }
+
+    // ==================== 图例控件 ====================
+
+    /**
+     * GDP分级设色图例
+     */
+    const choroplethLegend = L.control({ position: 'bottomright' });
+
+    choroplethLegend.onAdd = function () {
+        const div = L.DomUtil.create('div', 'legend-panel');
+        let html = '<h4>🎨 GDP分级设色（亿元）</h4>';
+        html += '<div style="font-size:10px;color:#999;margin-bottom:6px;">顺序色带 YlOrRd（黄→橙→红）</div>';
+
+        for (let i = 0; i < GDP_GRADES.length; i++) {
+            const from = GDP_GRADES[i];
+            const to = GDP_GRADES[i + 1];
+            html += `
+                <div class="legend-row">
+                    <span class="legend-color" style="background:${GDP_COLORS[i]}"></span>
+                    <span>${from.toLocaleString()}${to ? ' ~ ' + to.toLocaleString() : '+'}</span>
+                </div>`;
+        }
+
+        html += `
+            <div style="margin-top:6px; padding-top:6px; border-top:1px solid #ddd;">
+                <div class="legend-row">
+                    <span class="legend-color" style="background:#cccccc"></span>
+                    <span>无数据 / 未统计</span>
+                </div>
+            </div>`;
+
+        div.innerHTML = html;
+        return div;
+    };
+
+    /**
+     * 比例符号图例
+     */
+    const symbolLegend = L.control({ position: 'bottomright' });
+
+    symbolLegend.onAdd = function () {
+        const div = L.DomUtil.create('div', 'legend-panel');
+        let html = '<h4>🔵 人口比例符号（万人）</h4>';
+        html += '<div style="font-size:10px;color:#999;margin-bottom:6px;">平方根缩放 r = √pop × 1.5</div>';
+
+        const refPops = [200, 500, 1000, 2000, 3200];
+        refPops.forEach(pop => {
+            const r = getSymbolRadius(pop);
+            const size = Math.round(r * 2);
+            html += `
+                <div class="legend-row" style="margin:6px 0;">
+                    <span class="legend-circle" style="width:${size}px;height:${size}px"></span>
+                    <span>${pop.toLocaleString()} 万</span>
+                </div>`;
+        });
+
+        div.innerHTML = html;
+        return div;
+    };
+
+    // ==================== 信息面板 ====================
+
+    const infoPanel = L.control({ position: 'topright' });
+
+    infoPanel.onAdd = function () {
+        const div = L.DomUtil.create('div', 'info-panel');
+        div.innerHTML = `
+            <h4>📊 全国统计概览</h4>
+            <div id="infoStats">
+                <p class="hint">数据加载中...</p>
+            </div>`;
+        return div;
+    };
+
+    function updateInfoPanel() {
+        const values = Object.values(PROVINCE_DATA).filter(d => d.gdp > 0);
+        const totalGDP = values.reduce((s, d) => s + d.gdp, 0);
+        const totalPop = values.reduce((s, d) => s + d.pop, 0);
+        const avgGDP = Math.round(totalGDP / values.length);
+        const maxEntry = values.reduce((a, b) => a.gdp > b.gdp ? a : b);
+        const minEntry = values.reduce((a, b) => a.gdp < b.gdp ? a : b);
+
+        const el = document.getElementById('infoStats');
+        if (el) {
+            el.innerHTML = `
+                <div class="row">📊 GDP总量：<span class="val">${(totalGDP/10000).toFixed(2)}</span> 万亿</div>
+                <div class="row">👥 总人口：<span class="val">${(totalPop/10000).toFixed(2)}</span> 亿</div>
+                <div class="row">📈 省均GDP：<span class="val">${avgGDP.toLocaleString()}</span> 亿</div>
+                <div class="row">🔺 最高：<span class="val">${maxEntry.name}</span> (${maxEntry.gdp.toLocaleString()}亿)</div>
+                <div class="row">🔻 最低：<span class="val">${minEntry.name}</span> (${minEntry.gdp.toLocaleString()}亿)</div>
+                <div style="margin-top:6px;font-size:10px;color:#aaa;">数据年份：2023</div>`;
+        }
+    }
+
+    // ==================== 模式切换 ====================
+
+    function setMode(mode) {
+        currentMode = mode;
+
+        // 更新按钮状态
+        document.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('active'));
+        document.querySelector(`[data-mode="${mode}"]`)?.classList.add('active');
+
+        // 根据模式控制图层
+        switch (mode) {
+            case 'all':
+                createChoroplethLayer(false);
+                if (symbolLayer) map.addLayer(symbolLayer);
+                else createSymbolLayer();
+                break;
+            case 'choropleth':
+                createChoroplethLayer(false);
+                if (symbolLayer) map.removeLayer(symbolLayer);
+                break;
+            case 'symbol':
+                if (choroplethLayer) map.removeLayer(choroplethLayer);
+                if (symbolLayer) map.addLayer(symbolLayer);
+                else createSymbolLayer();
+                break;
+            case 'high-gdp':
+                createChoroplethLayer(true);  // filter: gdp >= 50000
+                if (symbolLayer) map.removeLayer(symbolLayer);
+                break;
+        }
+    }
+
+    // ==================== 数据加载 ====================
+
+    async function loadData() {
+        try {
+            console.log('🔄 加载省级GeoJSON数据...');
+            const resp = await fetch(GEOJSON_URL);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            geoJSONData = await resp.json();
+            console.log(`✅ 加载成功：${geoJSONData.features.length} 个省级行政区`);
+
+            // 创建图层
+            createChoroplethLayer(false);
+            createSymbolLayer();
+
+            // 添加控件
+            choroplethLegend.addTo(map);
+            symbolLegend.addTo(map);
+            infoPanel.addTo(map);
+            updateInfoPanel();
+
+            // 自适应范围
+            map.fitBounds(choroplethLayer.getBounds(), { padding: [20, 20] });
+
+            // 隐藏加载遮罩
+            document.getElementById('loading').classList.add('hidden');
+
+        } catch (err) {
+            console.error('❌ 加载失败:', err);
+            document.getElementById('loading').innerHTML = `
+                <div style="text-align:center;color:#e74c3c;">
+                    <p style="font-size:18px;">⚠️ 数据加载失败</p>
+                    <p style="font-size:13px;margin-top:8px;">${err.message}</p>
+                    <p style="font-size:12px;color:#999;">GeoJSON 源: ${GEOJSON_URL}</p>
+                    <button onclick="location.reload()"
+                        style="margin-top:12px;padding:8px 20px;border:none;background:#1890ff;color:#fff;border-radius:6px;cursor:pointer;">
+                        🔄 重新加载</button>
+                </div>`;
+        }
+    }
+
+    // ==================== 启动 ====================
+    document.addEventListener('DOMContentLoaded', () => {
+        initMap();
+
+        // 绑定模式切换按钮
+        document.querySelectorAll('.ctrl-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                setMode(this.dataset.mode);
+            });
+        });
+
+        // 开始加载数据
+        loadData();
+    });
+    </script>
+</body>
+</html>

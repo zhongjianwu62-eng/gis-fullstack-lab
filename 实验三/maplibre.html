@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实验三(3) - MapLibre GL JS 矢量瓦片可视化</title>
+    <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Microsoft YaHei','PingFang SC',sans-serif; overflow: hidden; height: 100vh; }
+
+        #map { position: absolute; top: 50px; bottom: 0; width: 100%; }
+
+        /* ===== 顶部工具栏 ===== */
+        .toolbar {
+            position: absolute; top: 0; left: 0; right: 0; height: 50px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            display: flex; align-items: center; padding: 0 16px; gap: 8px; z-index: 1000;
+        }
+        .toolbar .brand { color: #fff; font-size: 16px; font-weight: 700; margin-right: 16px; white-space: nowrap; }
+        .toolbar .brand span { color: #40a9ff; }
+
+        .tb-btn {
+            padding: 6px 14px; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px;
+            background: transparent; color: #ccc; cursor: pointer; font-size: 12px;
+            font-family: inherit; transition: all 0.2s; white-space: nowrap;
+        }
+        .tb-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        .tb-btn.active { background: #1890ff; border-color: #1890ff; color: #fff; font-weight: 600; }
+
+        .tb-sep { width: 1px; height: 24px; background: rgba(255,255,255,0.15); margin: 0 4px; }
+
+        /* ===== 侧边面板 ===== */
+        .side-panel {
+            position: absolute; top: 60px; right: 10px; width: 280px;
+            background: rgba(255,255,255,0.95); border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 999;
+            overflow: hidden; transition: opacity 0.3s;
+        }
+        .side-panel .panel-head {
+            padding: 12px 16px; background: #f8f9fa;
+            font-size: 14px; font-weight: 600; color: #333;
+            border-bottom: 1px solid #eee;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .side-panel .panel-body { padding: 12px 16px; max-height: 400px; overflow-y: auto; }
+
+        /* 样式切换器列表 */
+        .style-list { list-style: none; }
+        .style-item {
+            display: flex; align-items: center; padding: 10px 12px; border-radius: 8px;
+            cursor: pointer; margin-bottom: 6px; transition: all 0.2s;
+        }
+        .style-item:hover { background: #f0f0f0; }
+        .style-item.active { background: #e3f2fd; border: 1px solid #90caf9; }
+        .style-swatch {
+            width: 44px; height: 32px; border-radius: 4px; margin-right: 10px;
+            flex-shrink: 0; border: 2px solid #ddd;
+        }
+        .style-item.active .style-swatch { border-color: #1890ff; }
+        .style-meta { flex: 1; min-width: 0; }
+        .style-meta .name { font-size: 13px; font-weight: 500; color: #333; }
+        .style-meta .desc { font-size: 11px; color: #888; margin-top: 2px; }
+
+        /* 统计信息 */
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .stat-card {
+            text-align: center; padding: 10px; background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .stat-card .val { font-size: 20px; font-weight: 700; color: #1890ff; }
+        .stat-card .lbl { font-size: 11px; color: #888; margin-top: 2px; }
+
+        /* ===== 图例 ===== */
+        .legend-overlay {
+            position: absolute; bottom: 30px; left: 10px; z-index: 999;
+            background: rgba(255,255,255,0.95); padding: 12px 16px;
+            border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+            font-size: 12px;
+        }
+        .legend-overlay h4 { margin-bottom: 8px; font-size: 13px; }
+        .leg-row { display: flex; align-items: center; margin: 4px 0; }
+        .leg-dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; }
+        .leg-line { width: 20px; height: 3px; border-radius: 2px; margin-right: 8px; flex-shrink: 0; }
+
+        /* ===== 加载提示 ===== */
+        .loading-toast {
+            position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); color: #fff; padding: 8px 20px;
+            border-radius: 20px; font-size: 13px; z-index: 9999;
+            pointer-events: none; transition: opacity 0.3s;
+        }
+
+        /* Popup */
+        .maplibregl-popup-content { border-radius: 10px; overflow: hidden; padding: 0; }
+        .popup-inner { padding: 12px 14px; min-width: 160px; }
+        .popup-inner h4 { margin: 0 0 6px; font-size: 15px; color: #333; }
+        .popup-inner p { margin: 3px 0; font-size: 12px; color: #666; }
+        .popup-inner .tag {
+            display: inline-block; padding: 2px 8px; border-radius: 10px;
+            font-size: 11px; color: #fff; margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部工具栏 -->
+    <div class="toolbar">
+        <div class="brand">🧭 <span>MapLibre</span> GL JS 4.7</div>
+        <button class="tb-btn active" data-tab="driven">📊 数据驱动样式</button>
+        <button class="tb-btn" data-tab="cluster">🔵 点聚合</button>
+        <button class="tb-btn" data-tab="buildings">🏗️ 3D建筑</button>
+        <span class="tb-sep"></span>
+        <button class="tb-btn" id="btnStylePanel">🎨 样式切换</button>
+        <span class="tb-sep"></span>
+        <span style="color:#888;font-size:11px;margin-left:auto;" id="statusText">就绪</span>
+    </div>
+
+    <!-- 地图 -->
+    <div id="map"></div>
+
+    <!-- 样式切换面板 -->
+    <div class="side-panel" id="stylePanel" style="display:none;">
+        <div class="panel-head">
+            🎨 地图样式
+            <button style="border:none;background:none;cursor:pointer;font-size:16px;" onclick="document.getElementById('stylePanel').style.display='none'">✕</button>
+        </div>
+        <div class="panel-body">
+            <ul class="style-list" id="styleList"></ul>
+        </div>
+    </div>
+
+    <!-- 统计面板 -->
+    <div class="side-panel" id="statsPanel">
+        <div class="panel-head">📊 数据统计</div>
+        <div class="panel-body">
+            <div class="stat-grid" id="statGrid"></div>
+            <div id="extraInfo" style="margin-top:10px;font-size:12px;color:#666;"></div>
+        </div>
+    </div>
+
+    <!-- 图例 -->
+    <div class="legend-overlay" id="legendBox">
+        <h4 id="legendTitle">📋 图例</h4>
+        <div id="legendContent"></div>
+    </div>
+
+    <!-- 加载提示 -->
+    <div class="loading-toast" id="loadingToast" style="opacity:0;">⏳ 加载中...</div>
+
+    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+    <script>
+    /* ================================================================
+       实验三(3) - MapLibre GL JS 矢量瓦片可视化
+       功能：
+         1. MapLibre 地图 + 矢量瓦片底图 (Style JSON)
+         2. GeoJSON Source/Layer 数据驱动样式
+         3. 样式切换器 (5套配色/底图)
+         4. 点聚合可视化
+         5. fill-extrusion 3D建筑拉伸
+       ================================================================ */
+
+    // ==================== 地图样式定义 ====================
+    const MAP_STYLES = [
+        {
+            id: 'osm-bright', name: 'OSM 明亮', desc: 'OpenStreetMap 标准风格',
+            color: '#f5f5f5',
+            style: { version:8, sources:{ osm:{ type:'raster', tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize:256, attribution:'© OSM' } }, layers:[{ id:'osm', type:'raster', source:'osm' }] }
+        },
+        {
+            id: 'carto-dark', name: '暗黑模式', desc: 'CartoDB Dark Matter',
+            color: '#2c3e50',
+            style: { version:8, sources:{ carto:{ type:'raster', tiles:['https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'], tileSize:256 } }, layers:[{ id:'carto', type:'raster', source:'carto' }] }
+        },
+        {
+            id: 'esri-sat', name: '卫星影像', desc: 'ESRI World Imagery',
+            color: '#1a5f2a',
+            style: { version:8, sources:{ esri:{ type:'raster', tiles:['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize:256 } }, layers:[{ id:'esri', type:'raster', source:'esri' }] }
+        },
+        {
+            id: 'carto-light', name: '浅色简约', desc: 'CartoDB Positron (无标签)',
+            color: '#e8e8e8',
+            style: { version:8, sources:{ clight:{ type:'raster', tiles:['https://a.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}.png'], tileSize:256 } }, layers:[{ id:'clight', type:'raster', source:'clight' }] }
+        },
+        {
+            id: 'topo', name: '地形地图', desc: 'OpenTopoMap 等高线',
+            color: '#d4edda',
+            style: { version:8, sources:{ topo:{ type:'raster', tiles:['https://a.tile.opentopomap.org/{z}/{x}/{y}.png'], tileSize:256 } }, layers:[{ id:'topo', type:'raster', source:'topo' }] }
+        }
+    ];
+
+    // ==================== 全局状态 ====================
+    let map;
+    let currentStyleId = 'osm-bright';
+    let currentTab = 'driven';        // driven | cluster | buildings
+    let allSourcesAdded = false;
+
+    // ==================== 数据：北京地标（数据驱动样式用） ====================
+    const beijingLandmarks = {
+        type: 'FeatureCollection',
+        features: [
+            { type:'Feature', properties:{ name:'天安门',       category:'landmark',  importance:100, visitors:1500 }, geometry:{ type:'Point', coordinates:[116.3912,39.9060] } },
+            { type:'Feature', properties:{ name:'故宫',         category:'landmark',  importance:95,  visitors:1900 }, geometry:{ type:'Point', coordinates:[116.3972,39.9169] } },
+            { type:'Feature', properties:{ name:'颐和园',       category:'park',      importance:85,  visitors:1200 }, geometry:{ type:'Point', coordinates:[116.2755,39.9999] } },
+            { type:'Feature', properties:{ name:'天坛',         category:'landmark',  importance:90,  visitors:800  }, geometry:{ type:'Point', coordinates:[116.4107,39.8822] } },
+            { type:'Feature', properties:{ name:'鸟巢',         category:'stadium',   importance:88,  visitors:600  }, geometry:{ type:'Point', coordinates:[116.3954,40.0027] } },
+            { type:'Feature', properties:{ name:'水立方',       category:'stadium',   importance:82,  visitors:400  }, geometry:{ type:'Point', coordinates:[116.3938,40.0004] } },
+            { type:'Feature', properties:{ name:'北京大学',     category:'school',    importance:80,  visitors:300  }, geometry:{ type:'Point', coordinates:[116.3055,39.9927] } },
+            { type:'Feature', properties:{ name:'清华大学',     category:'school',    importance:80,  visitors:350  }, geometry:{ type:'Point', coordinates:[116.3267,40.0037] } },
+            { type:'Feature', properties:{ name:'圆明园',       category:'park',      importance:78,  visitors:500  }, geometry:{ type:'Point', coordinates:[116.3072,40.0091] } },
+            { type:'Feature', properties:{ name:'国家大剧院',   category:'landmark',  importance:75,  visitors:250  }, geometry:{ type:'Point', coordinates:[116.3898,39.9035] } },
+            { type:'Feature', properties:{ name:'中央电视台',   category:'landmark',  importance:72,  visitors:100  }, geometry:{ type:'Point', coordinates:[116.4642,39.9134] } },
+            { type:'Feature', properties:{ name:'798艺术区',   category:'culture',   importance:70,  visitors:200  }, geometry:{ type:'Point', coordinates:[116.4950,39.9854] } },
+            { type:'Feature', properties:{ name:'北海公园',     category:'park',      importance:68,  visitors:350  }, geometry:{ type:'Point', coordinates:[116.3895,39.9289] } },
+            { type:'Feature', properties:{ name:'景山公园',     category:'park',      importance:65,  visitors:280  }, geometry:{ type:'Point', coordinates:[116.3966,39.9253] } },
+            { type:'Feature', properties:{ name:'北京动物园',   category:'park',      importance:62,  visitors:400  }, geometry:{ type:'Point', coordinates:[116.3416,39.9433] } },
+            { type:'Feature', properties:{ name:'国家图书馆',   category:'culture',   importance:74,  visitors:180  }, geometry:{ type:'Point', coordinates:[116.3264,39.9419] } },
+            { type:'Feature', properties:{ name:'国贸大厦',     category:'landmark',  importance:85,  visitors:50   }, geometry:{ type:'Point', coordinates:[116.4602,39.9098] } },
+            { type:'Feature', properties:{ name:'王府井',       category:'shopping',  importance:78,  visitors:900  }, geometry:{ type:'Point', coordinates:[116.4107,39.9147] } },
+            { type:'Feature', properties:{ name:'西单',         category:'shopping',  importance:72,  visitors:700  }, geometry:{ type:'Point', coordinates:[116.3745,39.9095] } },
+            { type:'Feature', properties:{ name:'三里屯',       category:'shopping',  importance:76,  visitors:600  }, geometry:{ type:'Point', coordinates:[116.4540,39.9336] } },
+            { type:'Feature', properties:{ name:'雍和宫',       category:'landmark',  importance:70,  visitors:300  }, geometry:{ type:'Point', coordinates:[116.4226,39.9494] } },
+            { type:'Feature', properties:{ name:'地坛公园',     category:'park',      importance:55,  visitors:150  }, geometry:{ type:'Point', coordinates:[116.4192,39.9559] } },
+            { type:'Feature', properties:{ name:'北京南站',     category:'transport', importance:73,  visitors:500  }, geometry:{ type:'Point', coordinates:[116.3790,39.8650] } },
+            { type:'Feature', properties:{ name:'北京西站',     category:'transport', importance:75,  visitors:600  }, geometry:{ type:'Point', coordinates:[116.3216,39.8949] } },
+            { type:'Feature', properties:{ name:'首都机场T3',   category:'transport', importance:90,  visitors:1200 }, geometry:{ type:'Point', coordinates:[116.6146,40.0535] } },
+            { type:'Feature', properties:{ name:'大兴机场',     category:'transport', importance:88,  visitors:800  }, geometry:{ type:'Point', coordinates:[116.4106,39.5098] } },
+            { type:'Feature', properties:{ name:'朝阳公园',     category:'park',      importance:60,  visitors:220  }, geometry:{ type:'Point', coordinates:[116.4820,39.9335] } },
+            { type:'Feature', properties:{ name:'奥林匹克公园', category:'park',      importance:82,  visitors:550  }, geometry:{ type:'Point', coordinates:[116.3954,40.0027] } },
+            { type:'Feature', properties:{ name:'什刹海',       category:'park',      importance:66,  visitors:400  }, geometry:{ type:'Point', coordinates:[116.3889,39.9358] } },
+            { type:'Feature', properties:{ name:'南锣鼓巷',     category:'culture',   importance:68,  visitors:450  }, geometry:{ type:'Point', coordinates:[116.4091,39.9406] } },
+            { type:'Feature', properties:{ name:'中关村',       category:'shopping',  importance:70,  visitors:300  }, geometry:{ type:'Point', coordinates:[116.3178,39.9817] } },
+            { type:'Feature', properties:{ name:'国家会议中心', category:'stadium',   importance:72,  visitors:200  }, geometry:{ type:'Point', coordinates:[116.3930,40.0066] } }
+        ]
+    };
+
+    // ==================== 数据：北京CBD建筑（3D拉伸用） ====================
+    const cbdBuildings = {
+        type: 'FeatureCollection',
+        features: [
+            { type:'Feature', properties:{ name:'中国尊',           height:528, floors:108, area:43.7 }, geometry:{ type:'Polygon', coordinates:[[[116.4595,39.9112],[116.4608,39.9112],[116.4608,39.9100],[116.4595,39.9100],[116.4595,39.9112]]] } },
+            { type:'Feature', properties:{ name:'国贸三期A',        height:330, floors:74,  area:28.0 }, geometry:{ type:'Polygon', coordinates:[[[116.4570,39.9093],[116.4582,39.9093],[116.4582,39.9083],[116.4570,39.9083],[116.4570,39.9093]]] } },
+            { type:'Feature', properties:{ name:'国贸三期B',        height:295, floors:59,  area:22.0 }, geometry:{ type:'Polygon', coordinates:[[[116.4583,39.9098],[116.4593,39.9098],[116.4593,39.9090],[116.4583,39.9090],[116.4583,39.9098]]] } },
+            { type:'Feature', properties:{ name:'央视总部大楼',     height:234, floors:51,  area:47.0 }, geometry:{ type:'Polygon', coordinates:[[[116.4630,39.9145],[116.4655,39.9145],[116.4655,39.9125],[116.4630,39.9125],[116.4630,39.9145]]] } },
+            { type:'Feature', properties:{ name:'财富中心',         height:265, floors:60,  area:18.0 }, geometry:{ type:'Polygon', coordinates:[[[116.4558,39.9108],[116.4570,39.9108],[116.4570,39.9098],[116.4558,39.9098],[116.4558,39.9108]]] } },
+            { type:'Feature', properties:{ name:'银泰中心',         height:249, floors:63,  area:15.0 }, geometry:{ type:'Polygon', coordinates:[[[116.4542,39.9088],[116.4554,39.9088],[116.4554,39.9078],[116.4542,39.9078],[116.4542,39.9088]]] } },
+            { type:'Feature', properties:{ name:'环球金融中心',     height:242, floors:52,  area:16.0 }, geometry:{ type:'Polygon', coordinates:[[[116.4568,39.9128],[116.4580,39.9128],[116.4580,39.9118],[116.4568,39.9118],[116.4568,39.9128]]] } },
+            { type:'Feature', properties:{ name:'嘉里中心',         height:220, floors:45,  area:12.0 }, geometry:{ type:'Polygon', coordinates:[[[116.4550,39.9140],[116.4560,39.9140],[116.4560,39.9130],[116.4550,39.9130],[116.4550,39.9140]]] } },
+            { type:'Feature', properties:{ name:'京广中心',         height:208, floors:52,  area:11.0 }, geometry:{ type:'Polygon', coordinates:[[[116.4526,39.9142],[116.4538,39.9142],[116.4538,39.9132],[116.4526,39.9132],[116.4526,39.9142]]] } },
+            { type:'Feature', properties:{ name:'建外SOHO',         height:180, floors:38,  area:35.0 }, geometry:{ type:'Polygon', coordinates:[[[116.4610,39.9068],[116.4625,39.9068],[116.4625,39.9055],[116.4610,39.9055],[116.4610,39.9068]]] } },
+            { type:'Feature', properties:{ name:'万达广场',         height:150, floors:35,  area:25.0 }, geometry:{ type:'Polygon', coordinates:[[[116.4660,39.9083],[116.4675,39.9083],[116.4675,39.9070],[116.4660,39.9070],[116.4660,39.9083]]] } },
+            { type:'Feature', properties:{ name:'华贸中心',         height:160, floors:40,  area:20.0 }, geometry:{ type:'Polygon', coordinates:[[[116.4800,39.9100],[116.4815,39.9100],[116.4815,39.9088],[116.4800,39.9088],[116.4800,39.9100]]] } },
+            { type:'Feature', properties:{ name:'SK大厦',           height:140, floors:32,  area:10.0 }, geometry:{ type:'Polygon', coordinates:[[[116.4625,39.9065],[116.4638,39.9065],[116.4638,39.9055],[116.4625,39.9055],[116.4625,39.9065]]] } },
+            { type:'Feature', properties:{ name:'中环世贸',         height:120, floors:28,  area:14.0 }, geometry:{ type:'Polygon', coordinates:[[[116.4640,39.9118],[116.4652,39.9118],[116.4652,39.9108],[116.4640,39.9108],[116.4640,39.9118]]] } },
+            { type:'Feature', properties:{ name:'世贸天阶',         height:100, floors:24,  area:12.0 }, geometry:{ type:'Polygon', coordinates:[[[116.4515,39.9135],[116.4530,39.9135],[116.4530,39.9125],[116.4515,39.9125],[116.4515,39.9135]]] } }
+        ]
+    };
+
+    // ==================== 地震聚合数据 ====================
+    let earthquakesData = null;
+
+    // ==================== 分类颜色配置 ====================
+    const categoryConfig = {
+        'landmark':  { name:'历史地标', color:'#e74c3c', icon:'🏛️' },
+        'park':      { name:'公园',     color:'#27ae60', icon:'🌳' },
+        'school':    { name:'高校',     color:'#3498db', icon:'🎓' },
+        'stadium':   { name:'体育场馆',  color:'#f39c12', icon:'🏟️' },
+        'shopping':  { name:'购物商圈',  color:'#9b59b6', icon:'🛍️' },
+        'culture':   { name:'文化场所',  color:'#e67e22', icon:'🎭' },
+        'transport': { name:'交通枢纽',  color:'#1abc9c', icon:'🚄' }
+    };
+
+    // ==================== 地图初始化 ====================
+    function initMap() {
+        map = new maplibregl.Map({
+            container: 'map',
+            style: MAP_STYLES[0].style,
+            center: [116.40, 39.92],
+            zoom: 11,
+            minZoom: 3,
+            maxZoom: 18,
+            pitch: 0,
+            bearing: 0
+        });
+
+        // 控件
+        map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
+        map.addControl(new maplibregl.ScaleControl({ maxWidth:120, unit:'metric' }), 'bottom-left');
+
+        map.on('load', () => {
+            console.log('✅ MapLibre 地图加载完成');
+            allSourcesAdded = false;
+            switchTab('driven');  // 默认：数据驱动样式
+            renderStyleList();
+            updateStats();
+            updateLegend('driven');
+            setStatus('✅ 就绪 — 数据驱动样式模式');
+        });
+
+        map.on('style.load', () => {
+            // 样式切换后需要重新添加 source/layer
+            allSourcesAdded = false;
+            switchTab(currentTab);
+        });
+    }
+
+    // ==================== 显示加载提示 ====================
+    function showLoading(show) {
+        const el = document.getElementById('loadingToast');
+        el.style.opacity = show ? '1' : '0';
+    }
+
+    function setStatus(msg) {
+        document.getElementById('statusText').textContent = msg;
+    }
+
+    // ==================== Tab 切换 ====================
+    function switchTab(tab) {
+        currentTab = tab;
+
+        // 更新按钮状态
+        document.querySelectorAll('.tb-btn[data-tab]').forEach(b => b.classList.remove('active'));
+        document.querySelector(`.tb-btn[data-tab="${tab}"]`)?.classList.add('active');
+
+        // 移除所有自定义图层
+        removeAllCustomLayers();
+
+        // 根据tab添加对应图层
+        switch (tab) {
+            case 'driven':  setupDataDrivenStyle(); break;
+            case 'cluster': setupClustering(); break;
+            case 'buildings': setup3DBuildings(); break;
+        }
+
+        updateLegend(tab);
+    }
+
+    function removeAllCustomLayers() {
+        const customLayerIds = [
+            'landmarks-circle','landmarks-label',
+            'clusters','cluster-count','unclustered-point',
+            'buildings-3d','buildings-outline'
+        ];
+        customLayerIds.forEach(id => {
+            if (map.getLayer(id)) map.removeLayer(id);
+        });
+        const customSources = ['landmarks','earthquakes','cbd-buildings'];
+        customSources.forEach(id => {
+            if (map.getSource(id)) map.removeSource(id);
+        });
+    }
+
+    // ==================== (1) 数据驱动样式 ====================
+    function setupDataDrivenStyle() {
+        setStatus('📊 数据驱动样式 — 颜色/大小/透明度由属性控制');
+
+        // 添加 source
+        if (!map.getSource('landmarks')) {
+            map.addSource('landmarks', {
+                type: 'geojson',
+                data: beijingLandmarks,
+                generateId: true
+            });
+        }
+
+        // Circle 图层 — 数据驱动
+        map.addLayer({
+            id: 'landmarks-circle',
+            type: 'circle',
+            source: 'landmarks',
+            paint: {
+                // 半径：根据 importance 线性插值
+                'circle-radius': [
+                    'interpolate', ['linear'],
+                    ['get', 'importance'],
+                    55, 6,
+                    100, 18
+                ],
+                // 颜色：根据 category 匹配
+                'circle-color': [
+                    'match', ['get', 'category'],
+                    'landmark',  '#e74c3c',
+                    'park',      '#27ae60',
+                    'school',    '#3498db',
+                    'stadium',   '#f39c12',
+                    'shopping',  '#9b59b6',
+                    'culture',   '#e67e22',
+                    'transport', '#1abc9c',
+                    '#95a5a6'
+                ],
+                'circle-opacity': 0.85,
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#ffffff'
+            }
+        });
+
+        // Symbol 图层 — 名称标注
+        map.addLayer({
+            id: 'landmarks-label',
+            type: 'symbol',
+            source: 'landmarks',
+            layout: {
+                'text-field': ['get', 'name'],
+                'text-size': [
+                    'interpolate', ['linear'],
+                    ['get', 'importance'],
+                    55, 9,
+                    100, 13
+                ],
+                'text-offset': [0, 1.6],
+                'text-anchor': 'top',
+                'text-allow-overlap': false
+            },
+            paint: {
+                'text-color': '#333',
+                'text-halo-color': '#fff',
+                'text-halo-width': 2
+            }
+        });
+
+        // 交互
+        setupLandmarkInteraction();
+        updateStats();
+    }
+
+    function setupLandmarkInteraction() {
+        map.on('mouseenter', 'landmarks-circle', () => { map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', 'landmarks-circle', () => { map.getCanvas().style.cursor = ''; });
+
+        map.on('click', 'landmarks-circle', (e) => {
+            const f = e.features[0];
+            const p = f.properties;
+            const cfg = categoryConfig[p.category] || {};
+            new maplibregl.Popup({ closeButton:true, maxWidth:'260px' })
+                .setLngLat(f.geometry.coordinates)
+                .setHTML(`
+                    <div class="popup-inner">
+                        <h4>${cfg.icon || '📍'} ${p.name}</h4>
+                        <p>分类：${cfg.name || p.category}</p>
+                        <p>重要性：${p.importance}/100</p>
+                        <p>日均客流：${p.visitors} 人次</p>
+                        <span class="tag" style="background:${cfg.color || '#888'}">${cfg.name || p.category}</span>
+                    </div>`)
+                .addTo(map);
+        });
+    }
+
+    // ==================== (2) 点聚合 ====================
+    async function setupClustering() {
+        setStatus('🔵 点聚合 — 按缩放级别动态聚合，点击展开');
+
+        // 加载地震数据
+        if (!earthquakesData) {
+            showLoading(true);
+            try {
+                const resp = await fetch('https://docs.mapbox.com/mapbox-gl-js/assets/earthquakes.geojson');
+                earthquakesData = await resp.json();
+                console.log(`✅ 聚合数据加载: ${earthquakesData.features.length} 条`);
+            } catch (e) {
+                // 回退：使用北京地标数据做聚合
+                console.warn('地震数据加载失败，使用本地数据');
+                earthquakesData = beijingLandmarks;
+            }
+            showLoading(false);
+        }
+
+        // 添加聚合 source
+        if (!map.getSource('earthquakes')) {
+            map.addSource('earthquakes', {
+                type: 'geojson',
+                data: earthquakesData,
+                cluster: true,
+                clusterMaxZoom: 14,
+                clusterRadius: 50
+            });
+        }
+
+        // 聚合圆
+        map.addLayer({
+            id: 'clusters',
+            type: 'circle',
+            source: 'earthquakes',
+            filter: ['has', 'point_count'],
+            paint: {
+                'circle-color': ['step', ['get','point_count'], '#51bbd6', 100, '#f1f075', 500, '#f28cb1'],
+                'circle-radius': ['step', ['get','point_count'], 20, 100, 30, 500, 40],
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#ffffff'
+            }
+        });
+
+        // 聚合数量文字
+        map.addLayer({
+            id: 'cluster-count',
+            type: 'symbol',
+            source: 'earthquakes',
+            filter: ['has', 'point_count'],
+            layout: {
+                'text-field': '{point_count_abbreviated}',
+                'text-size': 12
+            },
+            paint: { 'text-color': ['step', ['get','point_count'], '#fff', 100, '#333'] }
+        });
+
+        // 非聚合单点
+        map.addLayer({
+            id: 'unclustered-point',
+            type: 'circle',
+            source: 'earthquakes',
+            filter: ['!', ['has', 'point_count']],
+            paint: {
+                'circle-color': ['interpolate',['linear'],['get','mag'], 1,'#2ecc71', 3,'#f1c40f', 5,'#e74c3c'],
+                'circle-radius': ['interpolate',['linear'],['get','mag'], 1,4, 6,20],
+                'circle-stroke-width': 1,
+                'circle-stroke-color': '#fff',
+                'circle-opacity': 0.8
+            }
+        });
+
+        // 交互：点击聚合圆展开
+        map.on('click', 'clusters', async (e) => {
+            const features = map.queryRenderedFeatures(e.point, { layers:['clusters'] });
+            if (!features.length) return;
+            const clusterId = features[0].properties.cluster_id;
+            const source = map.getSource('earthquakes');
+            const zoom = await source.getClusterExpansionZoom(clusterId);
+            map.easeTo({ center: features[0].geometry.coordinates, zoom, duration: 600 });
+        });
+
+        // 交互：点击单点
+        map.on('click', 'unclustered-point', (e) => {
+            const f = e.features[0]; const p = f.properties;
+            new maplibregl.Popup({ closeButton:true })
+                .setLngLat(f.geometry.coordinates)
+                .setHTML(`<div class="popup-inner"><h4>${p.mag ? '🌋 震级 '+p.mag.toFixed(1) : '📍 '+p.name}</h4><p>${p.place || p.category || ''}</p></div>`)
+                .addTo(map);
+        });
+
+        map.on('mouseenter', 'clusters', () => { map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', 'clusters', () => { map.getCanvas().style.cursor = ''; });
+        map.on('mouseenter', 'unclustered-point', () => { map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', 'unclustered-point', () => { map.getCanvas().style.cursor = ''; });
+
+        updateStats();
+    }
+
+    // ==================== (3) 3D建筑拉伸 ====================
+    function setup3DBuildings() {
+        setStatus('🏗️ 3D建筑拉伸 — fill-extrusion 高度映射 + 渐变色');
+
+        // 添加建筑 source
+        if (!map.getSource('cbd-buildings')) {
+            map.addSource('cbd-buildings', {
+                type: 'geojson',
+                data: cbdBuildings
+            });
+        }
+
+        // 3D fill-extrusion 图层
+        map.addLayer({
+            id: 'buildings-3d',
+            type: 'fill-extrusion',
+            source: 'cbd-buildings',
+            paint: {
+                // 拉伸高度（米→缩放：1米=1世界单位）
+                'fill-extrusion-height': ['get', 'height'],
+                // 基础高度（地面起）
+                'fill-extrusion-base': 0,
+                // 颜色：按高度渐变 (YlOrRd)
+                'fill-extrusion-color': [
+                    'interpolate', ['linear'],
+                    ['get', 'height'],
+                    0,   '#ffeda0',
+                    100, '#feb24c',
+                    200, '#fc4e2a',
+                    300, '#e31a1c',
+                    528, '#800026'
+                ],
+                'fill-extrusion-opacity': 0.85
+            }
+        });
+
+        // 建筑轮廓线
+        map.addLayer({
+            id: 'buildings-outline',
+            type: 'line',
+            source: 'cbd-buildings',
+            paint: {
+                'line-color': '#333',
+                'line-width': 1,
+                'line-opacity': 0.6
+            }
+        });
+
+        // 建筑名称标注
+        map.addLayer({
+            id: 'buildings-label',
+            type: 'symbol',
+            source: 'cbd-buildings',
+            layout: {
+                'text-field': ['concat', ['get', 'name'], '\n', ['to-string', ['get', 'height']], 'm'],
+                'text-size': 11,
+                'text-offset': [0, 2],
+                'text-anchor': 'top',
+                'text-allow-overlap': false
+            },
+            paint: {
+                'text-color': '#333',
+                'text-halo-color': 'rgba(255,255,255,0.9)',
+                'text-halo-width': 2
+            }
+        });
+
+        // 设置倾斜视角查看3D效果
+        map.easeTo({
+            center: [116.4600, 39.9100],
+            zoom: 14.5,
+            pitch: 60,
+            bearing: -30,
+            duration: 2000
+        });
+
+        // 交互
+        map.on('click', 'buildings-3d', (e) => {
+            const f = e.features[0]; const p = f.properties;
+            new maplibregl.Popup({ closeButton:true })
+                .setLngLat(e.lngLat)
+                .setHTML(`<div class="popup-inner"><h4>🏢 ${p.name}</h4><p>高度：<b>${p.height}m</b></p><p>楼层：${p.floors}层</p><p>面积：${p.area}万㎡</p></div>`)
+                .addTo(map);
+        });
+
+        map.on('mouseenter', 'buildings-3d', () => { map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', 'buildings-3d', () => { map.getCanvas().style.cursor = ''; });
+
+        updateStats();
+    }
+
+    // ==================== 样式切换 ====================
+    function renderStyleList() {
+        const container = document.getElementById('styleList');
+        container.innerHTML = MAP_STYLES.map(s => `
+            <li class="style-item ${s.id === currentStyleId ? 'active' : ''}" data-sid="${s.id}">
+                <div class="style-swatch" style="background:${s.color}"></div>
+                <div class="style-meta">
+                    <div class="name">${s.name}</div>
+                    <div class="desc">${s.desc}</div>
+                </div>
+            </li>
+        `).join('');
+
+        container.querySelectorAll('.style-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const sid = item.dataset.sid;
+                if (sid !== currentStyleId) switchStyle(sid);
+            });
+        });
+    }
+
+    function switchStyle(styleId) {
+        const styleDef = MAP_STYLES.find(s => s.id === styleId);
+        if (!styleDef) return;
+
+        showLoading(true);
+        const center = map.getCenter();
+        const zoom = map.getZoom();
+        const pitch = map.getPitch();
+        const bearing = map.getBearing();
+
+        currentStyleId = styleId;
+        allSourcesAdded = false;
+        map.setStyle(styleDef.style);
+
+        map.once('style.load', () => {
+            map.jumpTo({ center, zoom, pitch, bearing });
+            renderStyleList();
+            switchTab(currentTab);  // 重建图层
+            showLoading(false);
+            setStatus(`🎨 样式切换: ${styleDef.name}`);
+        });
+    }
+
+    // ==================== 统计更新 ====================
+    function updateStats() {
+        const grid = document.getElementById('statGrid');
+        const extra = document.getElementById('extraInfo');
+
+        switch (currentTab) {
+            case 'driven':
+                const cats = {};
+                beijingLandmarks.features.forEach(f => {
+                    const c = f.properties.category;
+                    cats[c] = (cats[c]||0) + 1;
+                });
+                grid.innerHTML = `
+                    <div class="stat-card"><div class="val">${beijingLandmarks.features.length}</div><div class="lbl">地标总数</div></div>
+                    <div class="stat-card"><div class="val">${Object.keys(cats).length}</div><div class="lbl">分类数</div></div>
+                    <div class="stat-card"><div class="val">${Math.max(...beijingLandmarks.features.map(f=>f.properties.importance))}</div><div class="lbl">最高重要度</div></div>
+                    <div class="stat-card"><div class="val">${beijingLandmarks.features.filter(f=>f.properties.category==='landmark').length}</div><div class="lbl">地标最多</div></div>`;
+                extra.innerHTML = '💡 颜色=分类 | 大小=重要性 | 点击查看详情';
+                break;
+            case 'cluster':
+                const count = earthquakesData ? earthquakesData.features.length : 0;
+                grid.innerHTML = `
+                    <div class="stat-card"><div class="val">${count}</div><div class="lbl">数据条数</div></div>
+                    <div class="stat-card"><div class="val">缩放</div><div class="lbl">聚合动态</div></div>
+                    <div class="stat-card"><div class="val">50px</div><div class="lbl">聚合半径</div></div>
+                    <div class="stat-card"><div class="val">14级</div><div class="lbl">最大聚合</div></div>`;
+                extra.innerHTML = '💡 点击聚合圆展开 | 缩放到14级以上看单点';
+                break;
+            case 'buildings':
+                const maxH = Math.max(...cbdBuildings.features.map(f=>f.properties.height));
+                const totalH = cbdBuildings.features.reduce((s,f)=>s+f.properties.height,0);
+                grid.innerHTML = `
+                    <div class="stat-card"><div class="val">${cbdBuildings.features.length}</div><div class="lbl">建筑数量</div></div>
+                    <div class="stat-card"><div class="val">${maxH}m</div><div class="lbl">最高建筑</div></div>
+                    <div class="stat-card"><div class="val">${(totalH/cbdBuildings.features.length).toFixed(0)}m</div><div class="lbl">平均高度</div></div>
+                    <div class="stat-card"><div class="val">60°</div><div class="lbl">倾斜视角</div></div>`;
+                extra.innerHTML = '💡 拖拽右键旋转 | Ctrl+拖拽倾斜 | 滚轮缩放';
+                break;
+        }
+    }
+
+    // ==================== 图例更新 ====================
+    function updateLegend(tab) {
+        const title = document.getElementById('legendTitle');
+        const content = document.getElementById('legendContent');
+
+        switch (tab) {
+            case 'driven':
+                title.textContent = '📋 分类图例';
+                content.innerHTML = Object.entries(categoryConfig).map(([k,v]) =>
+                    `<div class="leg-row"><span class="leg-dot" style="background:${v.color}"></span>${v.icon} ${v.name}</div>`
+                ).join('') + '<div style="margin-top:6px;font-size:10px;color:#999;">圆大小 = 重要性 (55~100)</div>';
+                break;
+            case 'cluster':
+                title.textContent = '📋 聚合图例';
+                content.innerHTML = `
+                    <div class="leg-row"><span class="leg-dot" style="background:#51bbd6;width:20px;height:20px;"></span>≤99 条</div>
+                    <div class="leg-row"><span class="leg-dot" style="background:#f1f075;width:24px;height:24px;"></span>100~499</div>
+                    <div class="leg-row"><span class="leg-dot" style="background:#f28cb1;width:28px;height:28px;"></span>≥500 条</div>`;
+                break;
+            case 'buildings':
+                title.textContent = '📋 高度色带';
+                content.innerHTML = `
+                    <div class="leg-row"><span class="leg-line" style="background:#ffeda0"></span>0~100m</div>
+                    <div class="leg-row"><span class="leg-line" style="background:#feb24c"></span>100~200m</div>
+                    <div class="leg-row"><span class="leg-line" style="background:#fc4e2a"></span>200~300m</div>
+                    <div class="leg-row"><span class="leg-line" style="background:#e31a1c"></span>300~400m</div>
+                    <div class="leg-row"><span class="leg-line" style="background:#800026"></span>400~528m</div>
+                    <div style="margin-top:6px;font-size:10px;color:#999;">YlOrRd 顺序色带</div>`;
+                break;
+        }
+    }
+
+    // ==================== 事件绑定 ====================
+    document.addEventListener('DOMContentLoaded', () => {
+        // Tab 按钮
+        document.querySelectorAll('.tb-btn[data-tab]').forEach(btn => {
+            btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+        });
+
+        // 样式面板按钮
+        document.getElementById('btnStylePanel').addEventListener('click', () => {
+            const panel = document.getElementById('stylePanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        });
+
+        // 初始化地图
+        initMap();
+    });
+    </script>
+</body>
+</html>

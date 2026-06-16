@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>钟健武 · 个人GIS作品集</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- 主样式 -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- ====== 头部 ====== -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="header-brand">
+        <span class="header-logo">🗺️</span>
+        <div class="header-text">
+          <h1>我的GIS作品集</h1>
+          <p class="header-subtitle">记录足迹 · 探索世界 · 用地图讲述我的故事</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <a href="../maplibre.html" class="header-btn" title="MapLibre 3D可视化" target="_blank">🏗️ 3D视图</a>
+        <a href="../专题地图.html" class="header-btn" title="GeoJSON专题地图" target="_blank">📊 专题图</a>
+        <span class="header-badge">P1 作品集</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ====== 主体 ====== -->
+  <main class="main-container">
+
+    <!-- 地图区域 -->
+    <div id="map" class="map-container">
+      <!-- 模式切换按钮 -->
+      <div class="mode-switcher" id="mode-switcher">
+        <button class="mode-btn active" data-mode="explore" title="探索模式：自由浏览">🔍 探索</button>
+        <button class="mode-btn" data-mode="timeline" title="时间线模式：按时间查看">⏱️ 时光</button>
+        <button class="mode-btn" data-mode="thematic" title="专题模式：GDP数据">📊 专题</button>
+        <button class="mode-btn" data-mode="editor" title="编辑模式：添加/修改/删除标注">✏️ 编辑</button>
+      </div>
+      <!-- 测量工具栏 -->
+      <div class="measure-toolbar" id="measure-toolbar">
+        <button class="measure-btn" id="btn-measure-start" title="开始测距 (或 Shift+点击地图)">📏 测距</button>
+        <button class="measure-btn" id="btn-measure-clear" style="display:none;">清除</button>
+        <span class="measure-result" id="measure-result" style="display:none;"></span>
+      </div>
+      <!-- 坐标栏 -->
+      <div class="coord-bar" id="coord-bar">
+        <span>经度: <b id="display-lng">--</b></span>
+        <span>纬度: <b id="display-lat">--</b></span>
+        <span>缩放: <b id="display-zoom">--</b></span>
+      </div>
+    </div>
+
+    <!-- 侧边栏 -->
+    <aside class="sidebar" id="sidebar">
+
+      <!-- 作者卡片 -->
+      <section class="side-card author-card">
+        <div class="avatar-ring">
+          <div class="avatar">👤</div>
+        </div>
+        <h3>钟健武</h3>
+        <p class="author-major">地理信息科学专业</p>
+        <p class="author-motto">"用空间视角理解世界"</p>
+      </section>
+
+      <!-- 分类筛选 -->
+      <section class="side-card filter-card">
+        <h4 class="card-title">📂 分类筛选</h4>
+        <div class="filter-buttons" id="filter-buttons">
+          <!-- 动态生成 -->
+        </div>
+      </section>
+
+      <!-- 足迹统计 -->
+      <section class="side-card stats-card">
+        <h4 class="card-title">📊 足迹统计</h4>
+        <div class="stats-grid" id="stats-grid">
+          <!-- 动态生成 -->
+        </div>
+      </section>
+
+      <!-- 地点列表 -->
+      <section class="side-card places-card">
+        <h4 class="card-title">📍 地点列表</h4>
+        <ul class="places-list" id="places-list">
+          <!-- 动态生成 -->
+        </ul>
+      </section>
+
+      <!-- 书签 -->
+      <section class="side-card bookmarks-card">
+        <h4 class="card-title">🔖 地图书签</h4>
+        <ul class="bookmarks-list" id="bookmarks-list">
+          <li class="bookmark-empty">暂无书签，点击地图添加</li>
+        </ul>
+        <button class="bookmark-add-btn" id="btn-add-bookmark">+ 添加当前视图</button>
+      </section>
+    </aside>
+  </main>
+
+  <!-- ====== 详情弹层（点击地点列表项时显示） ====== -->
+  <div class="detail-overlay" id="detail-overlay" style="display:none;">
+    <div class="detail-card" id="detail-card">
+      <button class="detail-close" id="detail-close">×</button>
+      <div class="detail-content" id="detail-content"></div>
+    </div>
+  </div>
+
+  <!-- ====== 标注编辑器弹层 ====== -->
+  <div class="editor-overlay" id="editor-overlay" style="display:none;">
+    <div class="editor-dialog" id="editor-dialog">
+      <div class="editor-header">
+        <h3 id="editor-title">✏️ 添加新地点</h3>
+        <button class="editor-close" id="editor-close">×</button>
+      </div>
+      <div class="editor-body">
+        <div class="editor-field">
+          <label>📍 地点名称</label>
+          <input type="text" id="editor-name" placeholder="例如：黄鹤楼">
+        </div>
+        <div class="editor-row">
+          <div class="editor-field">
+            <label>📂 分类</label>
+            <select id="editor-category">
+              <option value="education">🎓 教育经历</option>
+              <option value="life">🏠 日常生活</option>
+              <option value="travel" selected>✈️ 旅行足迹</option>
+              <option value="food">🍜 美食打卡</option>
+              <option value="memory">❤️ 特别记忆</option>
+            </select>
+          </div>
+          <div class="editor-field">
+            <label>📅 日期</label>
+            <input type="month" id="editor-date">
+          </div>
+        </div>
+        <div class="editor-row">
+          <div class="editor-field">
+            <label>🎨 图标 Emoji</label>
+            <input type="text" id="editor-icon" placeholder="📍" maxlength="2">
+          </div>
+          <div class="editor-field">
+            <label>⭐ 重要程度 (1-100)</label>
+            <input type="number" id="editor-importance" min="1" max="100" value="70">
+          </div>
+        </div>
+        <div class="editor-field">
+          <label>📝 描述</label>
+          <textarea id="editor-desc" rows="3" placeholder="描述这个地方的故事..."></textarea>
+        </div>
+        <div class="editor-field">
+          <label>💭 特别记忆（可选）</label>
+          <input type="text" id="editor-memory" placeholder="一句难忘的话...">
+        </div>
+        <div class="editor-row">
+          <div class="editor-field">
+            <label>🏙️ 城市</label>
+            <input type="text" id="editor-city" placeholder="例如：武汉">
+          </div>
+          <div class="editor-field">
+            <label>🗺️ 省份</label>
+            <input type="text" id="editor-province" placeholder="例如：湖北省">
+          </div>
+        </div>
+        <div class="editor-field" style="font-size:0.75rem;color:var(--text-muted);">
+          📌 坐标: <b id="editor-coord">点击地图选择位置</b>
+        </div>
+      </div>
+      <div class="editor-footer">
+        <button class="editor-btn editor-btn-delete" id="editor-btn-delete" style="display:none;">🗑️ 删除此地点</button>
+        <div class="editor-footer-right">
+          <button class="editor-btn editor-btn-cancel" id="editor-btn-cancel">取消</button>
+          <button class="editor-btn editor-btn-save" id="editor-btn-save">💾 保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== 底部 ====== -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-tech">
+        <span>🛠️ Leaflet 1.9.4</span>
+        <span>📐 GeoJSON (RFC 7946)</span>
+        <span>🗺️ OpenStreetMap</span>
+        <span>🏗️ MapLibre GL JS 4.7</span>
+      </div>
+      <p>GIS工程与开发课程 · P1个人作品集 · <span id="footer-year">2025</span></p>
+    </div>
+  </footer>
+
+  <!-- 脚本 -->
+  <script src="js/data.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
